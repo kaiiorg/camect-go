@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	camect_go "github.com/kaiiorg/camect-go"
 	"log/slog"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var (
@@ -50,6 +53,31 @@ func main() {
 		"hubName", info.Name,
 		"hubId", info.Id,
 	)
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	eventsChan, err := hub.Events(ctx, 1)
+	if err != nil {
+		slog.Error("failed to listen for events", "error", err.Error())
+		return
+	}
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	for {
+		select {
+		case sig := <-signalChan:
+			slog.Info("got signal to exit", "signal", sig)
+			ctxCancel()
+			time.Sleep(time.Second)
+		case e := <-eventsChan:
+			slog.Info("got event", "event", e)
+		}
+
+		if ctx.Err() != nil {
+			break
+		}
+	}
 }
 
 func initSlog() {

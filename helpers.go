@@ -1,10 +1,15 @@
 package camect_go
 
 import (
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/url"
 )
+
+func (h *Hub) auth() string {
+	return base64.StdEncoding.EncodeToString([]byte(h.username + ":" + h.password))
+}
 
 func (h *Hub) request(method, path string, params url.Values) ([]byte, error) {
 	u := url.URL{
