@@ -2,6 +2,7 @@ package camect_go
 
 import (
 	"crypto/tls"
+	"log/slog"
 	"net/http"
 )
 
@@ -10,14 +11,21 @@ type Hub struct {
 	username string
 	password string
 
+	logger     *slog.Logger
 	httpClient http.Client
 }
 
-func New(ip, username, password string) *Hub {
+func New(ip, username, password string, logger *slog.Logger) *Hub {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &Hub{
 		ip:       ip,
 		username: username,
 		password: password,
+
+		logger: logger,
 		httpClient: http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{

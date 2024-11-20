@@ -2,13 +2,26 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"runtime"
-
 	camect_go "github.com/kaiiorg/camect-go"
+	"log/slog"
+	"os"
+	"runtime"
+	"strings"
 )
 
 var (
+	logLevels = map[string]slog.Level{
+		"DEBUG": slog.LevelDebug,
+		"INFO":  slog.LevelInfo,
+		"WARN":  slog.LevelWarn,
+		"ERROR": slog.LevelError,
+	}
+)
+
+var (
+	json  = flag.Bool("json", false, "print JSON logs")
+	level = flag.String("level", "INFO", "log level: DEBUG, INFO, WARN, ERROR")
+
 	ip       = flag.String("ip", "0.0.0.0", "ip address of hub")
 	username = flag.String("username", "admin", "username of hub local admin")
 	password = flag.String("password", "this isn't a real password, provide your own", "password of hub local admin")
@@ -16,16 +29,45 @@ var (
 
 func main() {
 	flag.Parse()
+	initSlog()
 
-	fmt.Printf("camect-go on %s\n", runtime.Version())
+	slog.Info("camect-go", "goVersion", runtime.Version())
 
-	hub := camect_go.New(*ip, *username, *password)
+	hub := camect_go.New(
+		*ip,
+		*username,
+		*password,
+		nil, // logger, nil means use global default
+	)
 
 	info, err := hub.Info()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Hub Name: %s\n", info.Name)
-	fmt.Printf("Hub ID: %s\n", info.Id)
+	slog.Info(
+		"got hub info",
+		"hubName", info.Name,
+		"hubId", info.Id,
+	)
+}
+
+func initSlog() {
+	level, ok := logLevels[strings.ToUpper(*level)]
+	if !ok {
+		panic("invalid log level")
+	}
+
+	options := &slog.HandlerOptions{
+		Level: level,
+	}
+
+	var handler slog.Handler
+	if *json {
+		handler = slog.NewJSONHandler(os.Stdout, options)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, options)
+	}
+
+	slog.SetDefault(slog.New(handler))
 }
