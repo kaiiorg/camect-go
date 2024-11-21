@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/coder/websocket"
+	"github.com/kaiiorg/camect-go/events"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
+
+	"github.com/coder/websocket"
 )
 
 type Hub struct {
@@ -115,11 +117,19 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 				h.logger.Error(m.Err.Error())
 				return
 			}
-			h.logger.Info(
-				"Got message",
-				"type", m.Type,
-				"data", string(m.Data),
-			)
+
+			baseEvent, err := events.New(m.Data)
+			if err != nil {
+				h.logger.Error("failed to unmarshal event json", "error", err)
+				continue
+			}
+
+			switch baseEvent.Type {
+			case events.ModeEvent:
+				h.logger.Info("got mode changed event", "data", fmt.Sprintf("%#v", baseEvent.ModeChange()))
+			default:
+				h.logger.Warn("got unknown event", "type", baseEvent.Type)
+			}
 		}
 	}
 
