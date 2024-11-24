@@ -160,6 +160,9 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 			}
 
 			switch baseEvent.Type {
+			case events.AlertEvent:
+				// TODO send Alert events via channel
+				h.logger.Info("got alert", "data", fmt.Sprintf("%#v", baseEvent.Alert()))
 			case events.ModeEvent:
 				// TODO send ModeChange events via channel
 				h.logger.Info("got mode changed event", "data", fmt.Sprintf("%#v", baseEvent.ModeChange()))
@@ -169,6 +172,12 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 			case events.AlertEnabledEvent:
 				// TODO send AlertEnabledEvent events via channel
 				h.logger.Info("got alert enabled event", "data", fmt.Sprintf("%#v", baseEvent.AlertEnabled()))
+			case events.CameraOnlineEvent:
+				// TODO send CameraOnlineEvent events via channel
+				h.logger.Info("got camera online event", "data", fmt.Sprintf("%#v", baseEvent.CameraOnline()))
+			case events.CameraOfflineEvent:
+				// TODO send CameraOfflineEvent events via channel
+				h.logger.Info("got camera offline event", "data", fmt.Sprintf("%#v", baseEvent.CameraOffline()))
 			default:
 				// TODO send unknown events via channel
 				h.logger.Warn("got unknown event", "type", baseEvent.Type, "raw", string(baseEvent.Raw()))
