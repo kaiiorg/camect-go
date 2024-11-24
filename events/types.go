@@ -7,5 +7,7 @@ func (t Type) String() string {
 }
 
 const (
-	ModeEvent Type = "mode"
+	ModeEvent          Type = "mode"
+	AlertDisabledEvent Type = "alert_disabled"
+	AlertEnabledEvent  Type = "alert_enabled"
 )

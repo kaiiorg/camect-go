@@ -3,12 +3,15 @@ package camect_go
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
-	"github.com/kaiiorg/camect-go/events"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
+
+	"github.com/kaiiorg/camect-go/events"
 
 	"github.com/coder/websocket"
 )
@@ -58,15 +61,22 @@ func (h *Hub) Events(ctx context.Context, buffer int) (<-chan string, error) {
 		buffer = 1
 	}
 
-	conn, err := h.connectWs()
+	eventsChan := make(chan string, buffer)
+	err := h.connectAndStartListener(eventsChan)
 	if err != nil {
 		return nil, err
 	}
 
-	eventsChan := make(chan string, buffer)
-	go h.eventListener(eventsChan, conn)
-
 	return eventsChan, nil
+}
+
+func (h *Hub) connectAndStartListener(eventsChan chan string) error {
+	conn, err := h.connectWs()
+	if err != nil {
+		return err
+	}
+	go h.eventListener(eventsChan, conn)
+	return nil
 }
 
 func (h *Hub) connectWs() (*websocket.Conn, error) {
@@ -85,17 +95,13 @@ func (h *Hub) connectWs() (*websocket.Conn, error) {
 			},
 		},
 	)
-
 	return conn, err
 }
 
 func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
-	type webSocketMessage struct {
-		Type websocket.MessageType
-		Data []byte
-		Err  error
-	}
 	messageChan := make(chan *webSocketMessage, 1)
+	// Anonymous goroutine to continuously read from the web socket connection
+	// Exits when a read returns an error. Force this goroutine to exit by closing the connection
 	go func() {
 		for {
 			m := &webSocketMessage{}
@@ -107,15 +113,44 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 		}
 	}()
 
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-h.ctx.Done():
 			conn.Close(websocket.StatusGoingAway, "asked to exit")
 			return
+		case <-ticker.C:
+			err := conn.Ping(h.ctx)
+			if err != nil {
+				h.logger.Info("ping failed", "error", err)
+			}
 		case m := <-messageChan:
 			if m.Err != nil {
+				// TODO send error via channel
 				h.logger.Error(m.Err.Error())
-				return
+
+				if errors.Is(h.ctx.Err(), context.Canceled) {
+					return
+				}
+
+				for {
+					for i := 0; i < 5; i++ {
+						if errors.Is(h.ctx.Err(), context.Canceled) {
+							h.logger.Warn("asked to exit; stopping attempts to reconnect websocket")
+							return
+						}
+						time.Sleep(time.Second)
+					}
+
+					err := h.connectAndStartListener(eventsChan)
+					if err != nil {
+						h.logger.Info("failed to reconnect, will retry in 5 seconds", "error", err)
+						continue
+					}
+					h.logger.Info("reconnected websocket")
+					return
+				}
 			}
 
 			baseEvent, err := events.New(m.Data)
@@ -126,13 +161,20 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 
 			switch baseEvent.Type {
 			case events.ModeEvent:
+				// TODO send ModeChange events via channel
 				h.logger.Info("got mode changed event", "data", fmt.Sprintf("%#v", baseEvent.ModeChange()))
+			case events.AlertDisabledEvent:
+				// TODO send AlertDisabledEvent events via channel
+				h.logger.Info("got alert disabled event", "data", fmt.Sprintf("%#v", baseEvent.AlertDisabled()))
+			case events.AlertEnabledEvent:
+				// TODO send AlertEnabledEvent events via channel
+				h.logger.Info("got alert enabled event", "data", fmt.Sprintf("%#v", baseEvent.AlertEnabled()))
 			default:
-				h.logger.Warn("got unknown event", "type", baseEvent.Type)
+				// TODO send unknown events via channel
+				h.logger.Warn("got unknown event", "type", baseEvent.Type, "raw", string(baseEvent.Raw()))
 			}
 		}
 	}
-
 }
 
 func (h *Hub) Info() (*Info, error) {
