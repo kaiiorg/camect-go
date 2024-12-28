@@ -47,17 +47,8 @@ func main() {
 		nil, // logger, nil means use global default
 	)
 
-	info, err := hub.Info()
-	if err != nil {
-		panic(err)
-	}
-
-	slog.Info(
-		"got hub info",
-		"hubName", info.Name,
-		"hubId", info.Id,
-		"mode", info.Mode,
-	)
+	printHubInfo(hub)
+	printCameraInfo(hub)
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	eventsChan, err := hub.Events(ctx, 1)
@@ -117,6 +108,47 @@ func initSlog() {
 	}
 
 	slog.SetDefault(slog.New(handler))
+}
+
+func printHubInfo(hub *camect_go.Hub) {
+	info, err := hub.Info()
+	if err != nil {
+		panic(err)
+	}
+
+	slog.Info(
+		"got hub info",
+		"hubName", info.Name,
+		"hubId", info.Id,
+		"mode", info.Mode,
+	)
+}
+
+func printCameraInfo(hub *camect_go.Hub) {
+	cameras, err := hub.Cameras()
+	if err != nil {
+		panic(err)
+	}
+
+	streaming := 0
+
+	for _, camera := range cameras {
+		slog.Info(
+			"camera",
+			"cameraId", camera.Id,
+			"streaming", camera.Streaming,
+		)
+		if camera.Streaming {
+			streaming++
+		}
+	}
+
+	slog.Info(
+		"got cameras",
+		"count", len(cameras),
+		"streaming", streaming,
+	)
+
 }
 
 func setHubMode(hub *camect_go.Hub) {
