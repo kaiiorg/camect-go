@@ -30,6 +30,8 @@ var (
 	ip       = flag.String("ip", "0.0.0.0", "ip address of hub")
 	username = flag.String("username", "admin", "username of hub local admin")
 	password = flag.String("password", "this isn't a real password, provide your own", "password of hub local admin")
+
+	mode = flag.String("mode", "", "if set, will attempt to set hub to given mode (HOME or DEFAULT only)")
 )
 
 func main() {
@@ -54,6 +56,7 @@ func main() {
 		"got hub info",
 		"hubName", info.Name,
 		"hubId", info.Id,
+		"mode", info.Mode,
 	)
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -65,6 +68,8 @@ func main() {
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
+
+	go setHubMode(hub)
 
 	for {
 		select {
@@ -112,4 +117,22 @@ func initSlog() {
 	}
 
 	slog.SetDefault(slog.New(handler))
+}
+
+func setHubMode(hub *camect_go.Hub) {
+	var newMode camect_go.HubMode
+
+	switch *mode {
+	case "HOME":
+		newMode = camect_go.ModeHome
+	case "DEFAULT":
+		newMode = camect_go.ModeDefault
+	default:
+		return
+	}
+
+	err := hub.SetMode(newMode, "CLI Example")
+	if err != nil {
+		slog.Error("failed to set hub mode", "err", err.Error())
+	}
 }

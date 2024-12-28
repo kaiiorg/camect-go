@@ -4,4 +4,5 @@ package camect_go
 const (
 	homeInfoPath = "/api/GetHomeInfo"
 	eventWsPath  = "/api/event_ws"
+	setModePath  = "/api/SetOperationMode"
 )

@@ -3,6 +3,7 @@ package camect_go
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -53,7 +54,7 @@ func (h *Hub) Events(ctx context.Context, buffer int) (*CamectEvents, error) {
 	if h.ctx == nil {
 		h.ctx = ctx
 	} else {
-		return nil, AlreadyListeningForEvents
+		return nil, ErrAlreadyListeningForEvents
 	}
 
 	if buffer <= 0 {
@@ -177,10 +178,41 @@ func (h *Hub) eventListener(eventsChan *CamectEvents, conn *websocket.Conn) {
 }
 
 func (h *Hub) Info() (*Info, error) {
-	rawInfo, err := h.request(http.MethodGet, homeInfoPath, nil)
+	_, rawInfo, err := h.request(http.MethodGet, homeInfoPath, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return infoFromJson(rawInfo)
+}
+
+func (h *Hub) SetMode(newMode HubMode, reason string) error {
+	params := url.Values{}
+	params.Set("Mode", newMode.String())
+
+	if reason != "" {
+		params.Set("Reason", reason)
+	}
+
+	respCode, rawResp, err := h.request(http.MethodGet, setModePath, params)
+	if err != nil {
+		return err
+	}
+
+	if respCode == 200 {
+		return nil
+	}
+
+	resp := map[string]interface{}{}
+	err = json.Unmarshal(rawResp, &resp)
+	if err != nil {
+		return errors.Join(ErrFailedToSetMode, err)
+	}
+
+	errMsg, ok := resp["err_msg"]
+	if !ok {
+		return errors.Join(ErrFailedToSetMode, ErrReasonNotProvided)
+	}
+
+	return errors.Join(ErrFailedToSetMode, fmt.Errorf("%#v", errMsg))
 }

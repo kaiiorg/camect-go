@@ -3,5 +3,7 @@ package camect_go
 import "errors"
 
 var (
-	AlreadyListeningForEvents = errors.New("already listening for events")
+	ErrAlreadyListeningForEvents = errors.New("already listening for events")
+	ErrFailedToSetMode           = errors.New("failed to set mode")
+	ErrReasonNotProvided         = errors.New("reason was not provided")
 )

@@ -11,7 +11,7 @@ func (h *Hub) auth() string {
 	return base64.StdEncoding.EncodeToString([]byte(h.username + ":" + h.password))
 }
 
-func (h *Hub) request(method, path string, params url.Values) ([]byte, error) {
+func (h *Hub) request(method, path string, params url.Values) (int, []byte, error) {
 	u := url.URL{
 		Scheme:   "https",
 		Host:     h.ip,
@@ -29,17 +29,22 @@ func (h *Hub) request(method, path string, params url.Values) ([]byte, error) {
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	req.SetBasicAuth(h.username, h.password)
 
 	h.logger.Debug("sending request")
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
 
 	h.logger.Debug("reading response body")
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return resp.StatusCode, body, nil
 }
