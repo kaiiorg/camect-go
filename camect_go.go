@@ -49,7 +49,7 @@ func New(ip, username, password string, logger *slog.Logger) *Hub {
 	}
 }
 
-func (h *Hub) Events(ctx context.Context, buffer int) (<-chan string, error) {
+func (h *Hub) Events(ctx context.Context, buffer int) (*CamectEvents, error) {
 	if h.ctx == nil {
 		h.ctx = ctx
 	} else {
@@ -61,7 +61,7 @@ func (h *Hub) Events(ctx context.Context, buffer int) (<-chan string, error) {
 		buffer = 1
 	}
 
-	eventsChan := make(chan string, buffer)
+	eventsChan := newCamectEvent(buffer)
 	err := h.connectAndStartListener(eventsChan)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (h *Hub) Events(ctx context.Context, buffer int) (<-chan string, error) {
 	return eventsChan, nil
 }
 
-func (h *Hub) connectAndStartListener(eventsChan chan string) error {
+func (h *Hub) connectAndStartListener(eventsChan *CamectEvents) error {
 	conn, err := h.connectWs()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (h *Hub) connectWs() (*websocket.Conn, error) {
 	return conn, err
 }
 
-func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
+func (h *Hub) eventListener(eventsChan *CamectEvents, conn *websocket.Conn) {
 	messageChan := make(chan *webSocketMessage, 1)
 	// Anonymous goroutine to continuously read from the web socket connection
 	// Exits when a read returns an error. Force this goroutine to exit by closing the connection
@@ -127,9 +127,6 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 			}
 		case m := <-messageChan:
 			if m.Err != nil {
-				// TODO send error via channel
-				h.logger.Error(m.Err.Error())
-
 				if errors.Is(h.ctx.Err(), context.Canceled) {
 					return
 				}
@@ -161,26 +158,19 @@ func (h *Hub) eventListener(eventsChan chan string, conn *websocket.Conn) {
 
 			switch baseEvent.Type {
 			case events.AlertEvent:
-				// TODO send Alert events via channel
-				h.logger.Info("got alert", "data", fmt.Sprintf("%#v", baseEvent.Alert()))
+				sendEvent(baseEvent.Alert(), eventsChan.AlertChan, baseEvent.Type, h.logger)
 			case events.ModeEvent:
-				// TODO send ModeChange events via channel
-				h.logger.Info("got mode changed event", "data", fmt.Sprintf("%#v", baseEvent.ModeChange()))
+				sendEvent(baseEvent.ModeChange(), eventsChan.ModeChangeChan, baseEvent.Type, h.logger)
 			case events.AlertDisabledEvent:
-				// TODO send AlertDisabledEvent events via channel
-				h.logger.Info("got alert disabled event", "data", fmt.Sprintf("%#v", baseEvent.AlertDisabled()))
+				sendEvent(baseEvent.AlertDisabled(), eventsChan.AlertDisabledChan, baseEvent.Type, h.logger)
 			case events.AlertEnabledEvent:
-				// TODO send AlertEnabledEvent events via channel
-				h.logger.Info("got alert enabled event", "data", fmt.Sprintf("%#v", baseEvent.AlertEnabled()))
+				sendEvent(baseEvent.AlertEnabled(), eventsChan.AlertEnabledChan, baseEvent.Type, h.logger)
 			case events.CameraOnlineEvent:
-				// TODO send CameraOnlineEvent events via channel
-				h.logger.Info("got camera online event", "data", fmt.Sprintf("%#v", baseEvent.CameraOnline()))
+				sendEvent(baseEvent.CameraOnline(), eventsChan.CameraOnlineChan, baseEvent.Type, h.logger)
 			case events.CameraOfflineEvent:
-				// TODO send CameraOfflineEvent events via channel
-				h.logger.Info("got camera offline event", "data", fmt.Sprintf("%#v", baseEvent.CameraOffline()))
+				sendEvent(baseEvent.CameraOffline(), eventsChan.CameraOfflineChan, baseEvent.Type, h.logger)
 			default:
-				// TODO send unknown events via channel
-				h.logger.Warn("got unknown event", "type", baseEvent.Type, "raw", string(baseEvent.Raw()))
+				sendEvent(baseEvent.Raw(), eventsChan.UnknownEventChan, baseEvent.Type, h.logger)
 			}
 		}
 	}

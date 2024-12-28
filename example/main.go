@@ -3,13 +3,15 @@ package main
 import (
 	"context"
 	"flag"
-	camect_go "github.com/kaiiorg/camect-go"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"time"
+
+	camect_go "github.com/kaiiorg/camect-go"
 )
 
 var (
@@ -70,8 +72,20 @@ func main() {
 			slog.Info("got signal to exit", "signal", sig)
 			ctxCancel()
 			time.Sleep(time.Second)
-		case e := <-eventsChan:
-			slog.Info("got event", "event", e)
+		case e := <-eventsChan.AlertChan:
+			slog.Info("got alert", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.ModeChangeChan:
+			slog.Info("got mode changed event", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.AlertDisabledChan:
+			slog.Info("got alert disabled event", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.AlertEnabledChan:
+			slog.Info("got alert enabled event", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.CameraOnlineChan:
+			slog.Info("got camera online event", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.CameraOfflineChan:
+			slog.Info("got camera offline event", "data", fmt.Sprintf("%#v", e))
+		case e := <-eventsChan.UnknownEventChan:
+			slog.Warn("got unknown event", "raw", string(e))
 		}
 
 		if ctx.Err() != nil {
